@@ -1,135 +1,129 @@
-/*
- Treap tr(n);
- Treap tr(); 动态开点
-*/
-struct Treap {
-#define ls tr[u].l
-#define rs tr[u].r
-    struct TreapNode {
-        int l = 0, r = 0;
-        int key = 0, val = 0;
-        int siz = 0;
-    };
-    int n, ptr, root;
-    vector <TreapNode> tr;
-    vector <int> a;
-    Treap() : n(0), ptr(0), root(0), a(0) {
-        tr.reserve((int) 1E6);
-        tr.push_back({0, 0, 0, 0, 0});
+template<class Info>
+class Treap {
+public:
+    int n;
+    int root = 0;
+    vector<Info> tr {{}};   // init
+    Treap(int n = 1) : n(n) {
+        tr.reserve(n + 5);
     }
-    Treap(int _n) : n(_n), ptr(0), tr(_n + 5), a(_n + 5), root(0) {}
-    void pushup(int u) {
-        tr[u].siz = tr[ls].siz + tr[rs].siz + 1;
+
+private:
+    int newnode(int x) {
+        // init node info here
+        tr.push_back(Info(x));
+        return (int) tr.size() - 1;
     }
-    void pushdown(int u) {
+    void pull(int u) {
+        tr[u].siz = tr[tr[u].lc].siz + tr[tr[u].rc].siz + 1;
     }
-    int size() {
-        return tr[root].siz;
+    // ret: [root_l, root_r] holds val(root_l) <= x, val(root_r) > x
+    pair<int, int> split(int u, int x) {
+        if (u == 0) {
+            return {0, 0};
+        }
+        if (tr[u].val <= x) {
+            auto [l, r] = split(tr[u].rc, x);
+            tr[u].rc = l;
+            pull(u);
+            return {u, r};
+        } else {
+            auto [l, r] = split(tr[u].lc, x);
+            tr[u].lc = r;
+            pull(u);
+            return {l, u};
+        }
     }
-    // 动态开点直接返回 (int)tr.size() - 1
-    int add_node (int val) {
-        tr[++ptr] = {0, 0, rand(), val, 1};
-        return ptr;
+    // assume: val(u) <= val(v)
+    int merge(int u, int v) {
+        if (!u || !v) {
+            return u + v;
+        }
+        if (tr[u].pri < tr[v].pri) {
+            tr[u].rc = merge(tr[u].rc, v);
+            pull(u);
+            return u;
+        } else {
+            tr[v].lc = merge(u, tr[v].lc);
+            pull(v);
+            return v;
+        }
     }
-    // 按值分裂 
-    void split_by_val(int u, int val, int &x, int &y) {
+    bool find(int u, int x) {
         if (!u) {
-            x = y = 0;
-            return;
+            return false;
         }
-        pushdown(u);
-        if (tr[u].val <= val) {
-            x = u, split_by_val(rs, val, rs, y);
+        if (tr[u].val == x) {
+            return true;
+        }
+        return tr[u].val > x ? find(tr[u].lc, x) : find(tr[u].rc, x);
+    }
+    int kth(int u, int k) {
+        int l = tr[tr[u].lc].siz;
+        if (l + 1 == k) {
+            return tr[u].val;
+        }
+        if (l + 1 > k) {
+            return kth(tr[u].lc, k);
         } else {
-            y = u, split_by_val(ls, val, x, ls);
-        }
-        pushup(u);
-    }
-    // 按大小分裂
-    void split(int u, int k, int &x, int &y) {
-        if (!u) {
-            x = y = 0;
-            return;
-        }
-        pushdown(u);
-        if (tr[ls].siz + 1 <= k) {
-            x = u, split(rs, k - tr[ls].siz - 1, rs, y);
-        } else {
-            y = u, split(ls, k, x, ls);
-        }
-        pushup(u);
-    }
-    // prio(x) > prio(y) && val(x) <= val(y)
-    int merge(int x, int y) {
-        if (!x || !y) return x + y;
-        if (tr[x].key > tr[y].key) {
-            pushdown(x);
-            tr[x].r = merge(tr[x].r, y);
-            pushup(x);
-            return x;
-        } else {
-            pushdown(y);
-            tr[y].l = merge(x, tr[y].l);
-            pushup(y);
-            return y;
+            return kth(tr[u].rc, k - (l + 1));
         }
     }
-    void insert(int val) {
-        int x, y;
-        split_by_val(root, val, x, y);
-        root = merge(x, merge(add_node(val), y));
+
+public:
+    void insert(int x) {
+        int node = newnode(x);
+        auto [l, r] = split(root, x);
+        root = merge(l, node);
+        root = merge(root, r);
     }
-    void del(int val) {
-        int x, y, z;
-        split_by_val(root, val, x, z);
-        split_by_val(x, val - 1, x, y);
-        y = merge(tr[y].l, tr[y].r);
-        root = merge(merge(x, y), z);
+    void erase(int x) {
+        auto [l, r] = split(root, x - 1);
+        auto [u, v] = split(r, x);
+        u = merge(tr[u].lc, tr[u].rc);
+        root = merge(l, u);
+        root = merge(root, v);
     }
-    // 根据值查排名
-    int find_rk_by_val(int val) {
-        int x, y;
-        split_by_val(root, val - 1, x, y);
-        int res = tr[x].siz + 1;
-        root = merge(x, y);
-        return res;
+    bool find(int x) {
+        return find(root, x);
     }
-    // 根据排名查值
-    int find_val_by_rk(int k) {
-        int u = root;
-        while (u) {
-            if (tr[ls].siz + 1 == k) return tr[u].val;
-            else if (tr[ls].siz + 1 > k) u = ls;
-            else k -= tr[ls].siz + 1, u = rs;
-        }
-        return -1;
+    int rank(int x) {
+        auto [u, v] = split(root, x - 1);
+        int rnk = tr[u].siz + 1;
+        root = merge(u, v);
+        return rnk;
     }
-    bool exist(int val) {
-        int x, y, z;
-        split_by_val(root, val, x, z);
-        split_by_val(x, val - 1, x, y);
-        bool hs = y ? 1 : 0;
-        merge(x, merge(y, z));
-        return hs;
+    int kth(int k) {
+        return kth(root, k);
     }
-    int prev(int val) {
-        int x, y;
-        split_by_val(root, val - 1, x, y);
-        int u = x;
-        while (rs) u = rs;
-        int res = tr[u].val;
-        root = merge(x, y);
-        return res;
+    int prev(int x) {
+        auto [l, r] = split(root, x - 1);
+        int val = kth(l, tr[l].siz);
+        root = merge(l, r);
+        return val;
     }
-    int next(int val) {
-        int x, y;
-        split_by_val(root, val, x, y);
-        int u = y;
-        while (ls) u = ls;
-        int res = tr[u].val;
-        root = merge(x, y);
-        return res;
+    int next(int x) {
+        auto [l, r] = split(root, x);
+        int val = kth(r, 1);
+        root = merge(l, r);
+        return val;
     }
-#undef ls
-#undef rs
+};
+
+mt19937 rng;
+struct TreapInfo {
+    // must
+    int lc = 0, rc = 0;
+    int val = 0, siz = 0;
+    int pri;
+
+    // extra
+
+    TreapInfo() {
+        pri = rng();
+    }
+    TreapInfo(int val) : TreapInfo() {
+        this->val = val;
+        this->siz = 1;
+    }
 };
